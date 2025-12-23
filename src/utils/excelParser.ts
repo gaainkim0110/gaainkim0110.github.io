@@ -229,7 +229,11 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
     return memberMap;
   };
 
-  // 각 노드의 총 인원수 계산 (하위 조직 포함, 사번 기준 중복 제거, 외주직 제외)
+  // 인원수 카운트 대상 고용형태
+  const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
+
+  // 각 노드의 총 인원수 계산 (하위 조직 포함, 사번 기준 중복 제거)
+  // 임원, 정규_일반직, 정규직만 인원수에 포함
   const calculateTotalMembers = (node: OrgNode): void => {
     // 먼저 하위 노드들의 인원수 계산
     node.children.forEach(child => {
@@ -239,8 +243,10 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
     // 현재 노드와 모든 하위 노드에서 고유한 직원 수집
     const allMembers = collectAllMembersInNode(node);
 
-    // 고유 직원 수 계산 (외주직 제외)
-    const countableMembers = Array.from(allMembers.values()).filter(m => m.employmentType !== '외주직');
+    // 고유 직원 수 계산 (임원, 정규_일반직, 정규직만 포함)
+    const countableMembers = Array.from(allMembers.values()).filter(m =>
+      COUNTABLE_EMPLOYMENT_TYPES.includes(m.employmentType)
+    );
     node.memberCount = countableMembers.length;
     node.concurrentCount = countableMembers.filter(m => m.relation === '겸직').length;
   };

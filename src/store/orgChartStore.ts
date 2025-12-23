@@ -154,8 +154,11 @@ const collectAllMembers = (node: OrgNode): Map<string, { relation: string; emplo
   return memberMap;
 };
 
+// 인원수 카운트 대상 고용형태
+const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
+
 // Helper: 전체 트리의 인원수 재계산 (하위 조직 포함, 사번 기준 중복 제거)
-// 외주직은 조직장 이름은 표시하되 인원수에서는 제외
+// 임원, 정규_일반직, 정규직만 인원수에 포함
 const recalculateMemberCounts = (nodes: OrgNode[]): OrgNode[] => {
   return nodes.map(node => {
     // 먼저 자식 노드들의 인원수 재계산
@@ -167,8 +170,10 @@ const recalculateMemberCounts = (nodes: OrgNode[]): OrgNode[] => {
     // 현재 노드와 모든 하위 노드에서 고유한 직원 수집
     const allMembers = collectAllMembers(tempNode);
 
-    // 고유 직원 수 계산 (외주직 제외)
-    const countableMembers = Array.from(allMembers.values()).filter(m => m.employmentType !== '외주직');
+    // 고유 직원 수 계산 (임원, 정규_일반직, 정규직만 포함)
+    const countableMembers = Array.from(allMembers.values()).filter(m =>
+      COUNTABLE_EMPLOYMENT_TYPES.includes(m.employmentType)
+    );
     const uniqueMemberCount = countableMembers.length;
     const uniqueConcurrentCount = countableMembers.filter(m => m.relation === '겸직').length;
 
@@ -339,8 +344,8 @@ export const useOrgChartStore = create<OrgChartStore>()(
     {
       name: 'org-chart-storage',
       storage: createJSONStorage(() => localStorage),
+      // 설정만 저장 (cachedFiles는 데이터가 커서 localStorage 용량 초과 가능)
       partialize: (state) => ({
-        cachedFiles: state.cachedFiles,
         settings: state.settings,
       }),
     }
