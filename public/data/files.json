@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "name": "sample_org_data.xlsx",
+      "description": "샘플 조직도 데이터",
+      "path": "/data/sample_org_data.xlsx"
+    }
+  ]
+}

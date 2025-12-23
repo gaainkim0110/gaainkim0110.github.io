@@ -1,0 +1,329 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* NanumSquare Neo 폰트 */
+@font-face {
+  font-family: 'NanumSquare Neo';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/NanumSquareNeoTTF-bRg.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'NanumSquare Neo Bold';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/NanumSquareNeoTTF-cBd.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'NanumSquare Neo ExtraBold';
+  font-style: normal;
+  font-weight: 800;
+  src: url('/fonts/NanumSquareNeoTTF-dEb.woff2') format('woff2');
+  font-display: swap;
+}
+
+:root {
+  --font-nanum-square: 'NanumSquare Neo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-nanum-square-bold: 'NanumSquare Neo ExtraBold', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* 노드 색상 */
+  --color-node-level2: #70AD47;
+  --color-node-default: #F2F2F2;
+  --color-node-executive: #AAAAAA;
+
+  /* 텍스트 색상 */
+  --color-text-primary: #333333;
+  --color-text-inverse: #FFFFFF;
+
+  /* Liquid Glass 변수 */
+  --glass-blur: 20px;
+  --glass-opacity: 0.7;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: var(--font-nanum-square);
+}
+
+body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  min-height: 100vh;
+}
+
+.dark body {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+/* Liquid Glass 효과 */
+.glass-panel {
+  background: rgba(255, 255, 255, var(--glass-opacity));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+}
+
+.dark .glass-panel {
+  background: rgba(0, 0, 0, var(--glass-opacity));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* 조직도 노드 스타일 */
+.org-node {
+  transition: all 0.2s ease;
+}
+
+.org-node:hover {
+  transform: scale(1.02);
+}
+
+/* 네온 테두리 애니메이션 */
+@keyframes neon-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px #3b82f6, 0 0 10px #3b82f6, 0 0 15px #3b82f6;
+  }
+  50% {
+    box-shadow: 0 0 10px #3b82f6, 0 0 20px #3b82f6, 0 0 30px #3b82f6, 0 0 40px #3b82f6;
+  }
+}
+
+.neon-border {
+  animation: neon-glow 1.5s ease-in-out infinite;
+}
+
+/* 아이폰 스타일 흔들림 애니메이션 (드래그 모드) */
+@keyframes ios-wiggle {
+  0% {
+    transform: rotate(-1deg);
+  }
+  25% {
+    transform: rotate(1.5deg);
+  }
+  50% {
+    transform: rotate(-1.5deg);
+  }
+  75% {
+    transform: rotate(1deg);
+  }
+  100% {
+    transform: rotate(-1deg);
+  }
+}
+
+.animate-ios-wiggle {
+  animation: ios-wiggle 0.5s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+/* 선택된 노드 강조 효과 */
+@keyframes selected-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(59, 130, 246, 0.8),
+      0 0 15px rgba(59, 130, 246, 0.6),
+      0 0 30px rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(59, 130, 246, 1),
+      0 0 25px rgba(59, 130, 246, 0.8),
+      0 0 50px rgba(59, 130, 246, 0.5);
+  }
+}
+
+.animate-selected-glow {
+  animation: selected-pulse 1s ease-in-out infinite;
+}
+
+/* 드래그 모드에서 드롭 가능 영역 표시 */
+@keyframes drop-target-pulse {
+  0%, 100% {
+    border-color: rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    border-color: rgba(34, 197, 94, 1);
+  }
+}
+
+.animate-drop-target {
+  animation: drop-target-pulse 0.8s ease-in-out infinite;
+  border: 2px dashed rgba(34, 197, 94, 0.8);
+}
+
+/* 스크롤바 스타일링 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 연결선 스타일 */
+.connector-line {
+  stroke: #cbd5e1;
+  stroke-width: 2;
+  fill: none;
+}
+
+.dark .connector-line {
+  stroke: #475569;
+}
+
+/* 접기/펼치기 애니메이션 */
+.expandable-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.expandable-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.expandable-content.expanded {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+/* 폰트 가중치 유틸리티 */
+.font-nanum-regular {
+  font-family: var(--font-nanum-square);
+  font-weight: 400;
+}
+
+.font-nanum-bold {
+  font-family: var(--font-nanum-square);
+  font-weight: 700;
+}
+
+.font-nanum-extrabold {
+  font-family: var(--font-nanum-square-bold);
+  font-weight: 800;
+}
+
+/* 조직도 트리 연결선 스타일 */
+.tree-container {
+  padding-top: 20px;
+  list-style: none;
+}
+
+.tree-node {
+  position: relative;
+  list-style: none;
+}
+
+/* 자식 노드들의 컨테이너 */
+.tree-children {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* 자식들 사이를 연결하는 수평선 */
+.tree-children::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: 2px;
+  background-color: #cbd5e1;
+  /* 99px = 15px padding + 84px (half of node width 168px) */
+  left: 99px;
+  right: 99px;
+}
+
+/* 자식이 1개일 때는 수평선 숨김 */
+.tree-children:has(> .tree-node:only-child)::before {
+  display: none;
+}
+
+/* 각 자식 노드 */
+.tree-children > .tree-node {
+  position: relative;
+  padding: 20px 15px 0 15px;
+}
+
+/* 자식 노드 위로 올라가는 수직선 */
+.tree-children > .tree-node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 20px;
+  background-color: #cbd5e1;
+}
+
+/* 첫번째/마지막 자식의 수평선 위치 조정 */
+.tree-children > .tree-node:first-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 2px;
+  background-color: #cbd5e1;
+}
+
+.tree-children > .tree-node:last-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 2px;
+  background-color: #cbd5e1;
+}
+
+/* 자식이 1개일 때 수평선 숨김 */
+.tree-children > .tree-node:only-child::after {
+  display: none;
+}
+
+/* 다크모드 연결선 */
+.dark .tree-children::before,
+.dark .tree-children > .tree-node::before,
+.dark .tree-children > .tree-node::after,
+.dark .tree-vertical-line {
+  background-color: #475569;
+}
