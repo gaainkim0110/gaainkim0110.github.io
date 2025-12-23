@@ -1,37 +1,36 @@
 @echo off
-chcp 65001 >nul
 echo ==================================
-echo 조직도 관리 프로그램 설치 스크립트
+echo Organization Chart Manager Setup
 echo ==================================
 echo.
 
-REM Node.js 버전 확인
+REM Check Node.js
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
-    echo [X] Node.js가 설치되어 있지 않습니다.
-    echo Node.js 18 이상을 설치해주세요: https://nodejs.org/
+    echo [X] Node.js is not installed.
+    echo Please install Node.js 18 or higher: https://nodejs.org/
     pause
     exit /b 1
 )
 
 for /f "tokens=*" %%i in ('node -v') do set NODE_VERSION=%%i
-echo [OK] Node.js 버전: %NODE_VERSION%
+echo [OK] Node.js version: %NODE_VERSION%
 echo.
 
-REM npm 패키지 설치
-echo [..] 의존성 패키지를 설치합니다...
+REM Install npm packages
+echo [..] Installing dependencies...
 call npm install
 
 if %ERRORLEVEL% equ 0 (
     echo.
-    echo [OK] 설치가 완료되었습니다!
+    echo [OK] Installation completed!
     echo.
-    echo 실행 방법:
-    echo   run_dev.bat     - 개발 서버 실행
-    echo   npm run build   - 프로덕션 빌드
+    echo How to run:
+    echo   run_dev.bat     - Start development server
+    echo   npm run build   - Production build
     echo.
 ) else (
-    echo [X] 패키지 설치 중 오류가 발생했습니다.
+    echo [X] Error occurred during package installation.
     pause
     exit /b 1
 )

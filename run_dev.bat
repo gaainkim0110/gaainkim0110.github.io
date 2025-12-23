@@ -1,22 +1,21 @@
 @echo off
-chcp 65001 >nul
 echo ==================================
-echo 조직도 관리 프로그램 개발 서버
+echo Organization Chart Manager - Dev Server
 echo ==================================
 echo.
 
-REM node_modules 확인
+REM Check node_modules
 if not exist "node_modules" (
-    echo [..] 의존성 패키지가 설치되어 있지 않습니다.
-    echo 먼저 setup.bat를 실행해주세요.
+    echo [..] Dependencies not installed.
+    echo Please run setup.bat first.
     pause
     exit /b 1
 )
 
-echo [..] 개발 서버를 시작합니다...
-echo 브라우저에서 http://localhost:3000 을 열어주세요.
+echo [..] Starting development server...
+echo Open http://localhost:3000 in your browser.
 echo.
-echo 종료: Ctrl + C
+echo Press Ctrl + C to stop.
 echo.
 
 call npm run dev
