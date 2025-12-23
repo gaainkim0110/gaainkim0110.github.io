@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Employee, OrgNode, OrgChartState, CachedData, AppSettings, ThemeMode } from '@/types';
+import type { Employee, OrgNode, OrgChartState, CachedData, AppSettings, ThemeMode, CustomColor } from '@/types';
 
 interface OrgChartStore extends OrgChartState {
   // 캐시된 파일 목록
@@ -34,6 +34,8 @@ interface OrgChartStore extends OrgChartState {
   clearAllCache: () => void;
   setTheme: (theme: ThemeMode) => void;
   setSettings: (settings: Partial<AppSettings>) => void;
+  addCustomColor: (color: CustomColor) => void;
+  removeCustomColor: (colorValue: string) => void;
   reset: () => void;
 }
 
@@ -45,6 +47,7 @@ const initialSettings: AppSettings = {
     default: '#F2F2F2',
     executive: '#AAAAAA',
   },
+  customColors: [],
 };
 
 const initialState: Omit<OrgChartState, 'lastImportDate'> & {
@@ -333,6 +336,20 @@ export const useOrgChartStore = create<OrgChartStore>()(
 
       setSettings: (newSettings) => set((state) => ({
         settings: { ...state.settings, ...newSettings },
+      })),
+
+      addCustomColor: (color) => set((state) => ({
+        settings: {
+          ...state.settings,
+          customColors: [...(state.settings.customColors || []), color],
+        },
+      })),
+
+      removeCustomColor: (colorValue) => set((state) => ({
+        settings: {
+          ...state.settings,
+          customColors: (state.settings.customColors || []).filter(c => c.value !== colorValue),
+        },
       })),
 
       reset: () => set({

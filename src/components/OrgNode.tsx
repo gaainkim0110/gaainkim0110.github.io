@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { OrgNode as OrgNodeType, Employee } from '@/types';
 import { useOrgChartStore } from '@/store/orgChartStore';
@@ -10,16 +11,21 @@ import clsx from 'clsx';
 
 // 수정/이동된 노드 색상
 const MODIFIED_COLOR = '#419CFF';
-// 레벨4 (엑셀 레벨4 = displayLevel 3) 색상
+// 엑셀 레벨4 (displayLevel 3) 색상
 const LEVEL4_COLOR = '#002060';
 // 삭제 예정 노드 색상
 const DELETED_COLOR = '#000000';
+// 신설 노드 색상
+const NEW_COLOR = '#FF6861';
 // 인원수 카운트 및 팀원 목록 표시 대상 고용형태
 const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
+// 기본 Border가 표시되어야 하는 색상들 (수정, 폐지, 신설)
+const DEFAULT_BORDER_COLORS = [MODIFIED_COLOR, DELETED_COLOR, NEW_COLOR];
 
 // 노드 색상 옵션
 const COLOR_OPTIONS = [
   { value: 'default', label: 'Default', color: 'transparent', isDefault: true },
+  { value: '#FFFFFF', label: '일반', color: '#FFFFFF', isDefault: false },
   { value: '#70AD47', label: '레벨2', color: '#70AD47', isDefault: false },
   { value: '#002060', label: '레벨4', color: '#002060', isDefault: false },
   { value: '#419CFF', label: '수정', color: '#419CFF', isDefault: false },
@@ -46,7 +52,30 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
   const [editName, setEditName] = useState(node.name);
   const [editLeader, setEditLeader] = useState(node.leader?.name || '');
   const [editColor, setEditColor] = useState(node.color || 'default');
-  const { selectedNodeId, isDragMode, setSelectedNode, setDragMode, updateNode, addNode, deleteNode } = useOrgChartStore();
+  const [showCustomColorInput, setShowCustomColorInput] = useState(false); // 커스텀 색상 입력 모드
+  const [customColorValue, setCustomColorValue] = useState('#000000'); // 커스텀 색상 값
+  const [customColorLabel, setCustomColorLabel] = useState(''); // 커스텀 색상 라벨
+  const [customColorHasBorder, setCustomColorHasBorder] = useState(true); // 커스텀 색상 border 여부
+  const { selectedNodeId, isDragMode, setSelectedNode, setDragMode, updateNode, addNode, deleteNode, settings, addCustomColor, removeCustomColor } = useOrgChartStore();
+
+  // 커스텀 색상 중 border가 있는 색상들 추가
+  const borderColors = useMemo(() => {
+    const customBorderColors = (settings.customColors || [])
+      .filter(c => c.hasBorder)
+      .map(c => c.value);
+    return [...DEFAULT_BORDER_COLORS, ...customBorderColors];
+  }, [settings.customColors]);
+
+  // 노드에 적용할 실제 border 색상 결정 (isModified, isDeleted 상태 포함)
+  const effectiveBorderColor = useMemo(() => {
+    // 삭제 예정 노드
+    if (node.isDeleted) return DELETED_COLOR;
+    // 사용자가 명시적으로 설정한 border 색상
+    if (node.color && borderColors.includes(node.color)) return node.color;
+    // 수정된 노드 (color가 없거나 border가 없는 색상일 때)
+    if (node.isModified) return MODIFIED_COLOR;
+    return null;
+  }, [node.isDeleted, node.color, node.isModified, borderColors]);
 
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const isLongPress = useRef(false);
@@ -138,32 +167,45 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showActions, setSelectedNode]);
 
+  // 삭제 확인 다이얼로그 열릴 때 body 스크롤 잠금
+  // (EditDialog, AddNodeDialog는 각자 스크롤 잠금 처리함)
+  useEffect(() => {
+    if (!showDeleteConfirm) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [showDeleteConfirm]);
+
   // 조직명 행 스타일 결정 (첫번째 행)
   const getHeaderStyle = () => {
     // 삭제 예정 노드는 검정색 배경 + 흰색 텍스트
     if (node.isDeleted) {
-      return 'text-white font-nanum-bold rounded-t-lg';
+      return 'text-white font-nanum-bold';
     }
     // 사용자가 직접 설정한 색상이 있으면 우선
     if (node.color) {
-      return 'text-white font-nanum-bold rounded-t-lg';
+      return 'text-white font-nanum-bold';
     }
     // 수정/이동된 노드는 파란색 배경 (color가 없는 경우에만)
     if (node.isModified) {
-      return 'text-white font-nanum-bold rounded-t-lg';
+      return 'text-white font-nanum-bold';
     }
     if (node.level === 2) {
-      return 'bg-node-level2 text-white font-nanum-bold rounded-t-lg';
+      return 'bg-node-level2 text-white font-nanum-bold';
     }
-    // 레벨4 (엑셀 레벨4 = displayLevel 3)
+    // 엑셀 레벨4 (displayLevel 3)
     if (node.level === 3) {
-      return 'text-white font-nanum-bold rounded-t-lg';
+      return 'text-white font-nanum-bold';
     }
     // 임원인 경우: ExtraBold 폰트 + 검정색 텍스트
     if (isExecutive) {
-      return 'bg-node-executive text-black font-nanum-extrabold rounded-t-lg';
+      return 'bg-node-executive text-black font-nanum-extrabold';
     }
-    return 'bg-node-default text-text-primary rounded-t-lg';
+    return 'bg-node-default text-text-primary';
   };
 
   // 조직명 행 배경색
@@ -174,7 +216,7 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     if (node.color) return node.color;
     // 수정/이동된 노드는 파란색 (color가 없는 경우에만)
     if (node.isModified) return MODIFIED_COLOR;
-    // 레벨4 (엑셀 레벨4 = displayLevel 3)
+    // 엑셀 레벨4 (displayLevel 3)
     if (node.level === 3) return LEVEL4_COLOR;
     return undefined;
   };
@@ -198,7 +240,8 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
   const handleSaveInlineEdit = useCallback(() => {
     // 'default' 선택 시 color를 undefined로 설정하여 기존 우선순위 적용
     const newColor = editColor === 'default' ? undefined : editColor;
-    const hasChanges = editName !== node.name || editLeader !== (node.leader?.name || '') || newColor !== node.color;
+    // 색상 변경은 isModified에 영향을 주지 않음 (이름, 조직장 변경만 구조적 변경으로 간주)
+    const hasStructuralChanges = editName !== node.name || editLeader !== (node.leader?.name || '');
 
     updateNode(node.id, {
       name: editName,
@@ -208,8 +251,12 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
         isConcurrent: node.leader?.isConcurrent || false,
       } : undefined,
       color: newColor,
-      isModified: hasChanges ? true : node.isModified,
+      isModified: hasStructuralChanges ? true : node.isModified,
     });
+    setShowCustomColorInput(false);
+    setCustomColorValue('#000000');
+    setCustomColorLabel('');
+    setCustomColorHasBorder(true);
     setIsEditing(false);
   }, [node.id, node.name, node.leader, node.color, editName, editLeader, editColor, updateNode]);
 
@@ -218,6 +265,10 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     setEditName(node.name);
     setEditLeader(node.leader?.name || '');
     setEditColor(node.color || 'default');
+    setShowCustomColorInput(false);
+    setCustomColorValue('#000000');
+    setCustomColorLabel('');
+    setCustomColorHasBorder(true);
     setIsEditing(false);
   }, [node.name, node.leader?.name, node.color]);
 
@@ -228,11 +279,11 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     members: Employee[];
     color?: string;
   }) => {
-    const hasChanges =
+    // 색상 변경은 isModified에 영향을 주지 않음 (이름, 조직장, 멤버 변경만 구조적 변경으로 간주)
+    const hasStructuralChanges =
       updates.name !== node.name ||
       updates.leader?.name !== node.leader?.name ||
-      updates.members.length !== node.members.length ||
-      updates.color !== node.color;
+      updates.members.length !== node.members.length;
 
     updateNode(node.id, {
       name: updates.name,
@@ -241,7 +292,7 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
       memberCount: updates.members.length,
       concurrentCount: updates.members.filter(m => m.relation === '겸직').length,
       color: updates.color || undefined,
-      isModified: hasChanges ? true : node.isModified,
+      isModified: hasStructuralChanges ? true : node.isModified,
     });
   }, [node.id, node.name, node.leader, node.members, node.color, updateNode]);
 
@@ -310,9 +361,9 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     });
   }, [node.id, node.level, node.members, addNode, updateNode]);
 
-  // 인원수 표시 (레벨6 이상에서만 원소속/겸직 구분)
+  // 인원수 표시 (엑셀 레벨6 이상에서만 원소속/겸직 구분)
   const getMemberCountDisplay = () => {
-    // 레벨6 (엑셀 레벨6 = displayLevel 5) 이상에서만 원소속/겸직 구분
+    // 엑셀 레벨6 (displayLevel 5) 이상에서만 원소속/겸직 구분
     if (node.level >= 5 && node.concurrentCount > 0) {
       const originalCount = node.memberCount - node.concurrentCount;
       return `${originalCount}/${node.concurrentCount}`;
@@ -355,7 +406,9 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
         className={clsx(
           'group relative rounded-lg shadow-node cursor-pointer select-none overflow-hidden',
           'w-[168px] h-[72px]',  // 고정 너비/높이
-          'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
+          'bg-white dark:bg-gray-800',
+          // Border: effectiveBorderColor가 있으면 style로 적용, 아니면 기본 border
+          !effectiveBorderColor && 'border border-gray-200 dark:border-gray-700',
           // Hover 애니메이션 (드래그 모드가 아닐 때만)
           !isDragMode && 'hover:scale-105 transition-all duration-200',
           // 선택 상태 (액션 버튼 표시 중)
@@ -371,6 +424,13 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
           // Liquid Glass 효과
           'backdrop-blur-sm'
         )}
+        style={{
+          // effectiveBorderColor가 있을 때 3px solid border 적용
+          ...(effectiveBorderColor && {
+            border: `3px solid ${effectiveBorderColor}`,
+            borderRadius: '0.5rem', // rounded-lg와 동일
+          }),
+        }}
       >
         {/* 조직명 (색상 적용 영역) */}
         <div
@@ -379,7 +439,12 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
             getNameFontSize(),
             getHeaderStyle()
           )}
-          style={{ backgroundColor: getHeaderBgColor() }}
+          style={{
+            backgroundColor: getHeaderBgColor(),
+            // border가 있을 때는 내부 radius가 더 작아야 함 (8px - 3px = 5px)
+            borderTopLeftRadius: effectiveBorderColor ? '5px' : '8px',
+            borderTopRightRadius: effectiveBorderColor ? '5px' : '8px',
+          }}
         >
           <span className="line-clamp-2">{node.name}</span>
         </div>
@@ -574,10 +639,141 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
                     style={option.isDefault ? {
                       backgroundColor: 'white',
                       backgroundImage: 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)'
+                    } : option.value === '#FFFFFF' ? {
+                      backgroundColor: option.color,
+                      border: '2px solid #d1d5db'
                     } : { backgroundColor: option.color }}
                   />
                 ))}
+                {/* 커스텀 색상들 표시 */}
+                {(settings.customColors || []).map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => setEditColor(color.value)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      if (confirm(`'${color.label}' 색상을 삭제하시겠습니까?`)) {
+                        removeCustomColor(color.value);
+                        if (editColor === color.value) {
+                          setEditColor('default');
+                        }
+                      }
+                    }}
+                    title={`${color.label} (우클릭으로 삭제)`}
+                    className={clsx(
+                      'w-6 h-6 rounded border-2 transition-all relative',
+                      editColor === color.value
+                        ? 'border-blue-500 scale-110'
+                        : 'border-gray-300 dark:border-gray-600 hover:scale-105'
+                    )}
+                    style={{ backgroundColor: color.value }}
+                  >
+                    {color.hasBorder && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-400 rounded-full border border-white" title="테두리 있음" />
+                    )}
+                  </button>
+                ))}
+                {/* 색상 추가 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setShowCustomColorInput(!showCustomColorInput)}
+                  title="색상 추가"
+                  className={clsx(
+                    'w-6 h-6 rounded border-2 transition-all flex items-center justify-center',
+                    'border-dashed border-gray-400 dark:border-gray-500',
+                    'hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20',
+                    showCustomColorInput && 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                  )}
+                >
+                  <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
               </div>
+              {/* 커스텀 색상 입력 폼 */}
+              {showCustomColorInput && (
+                <div className="mt-2 p-2 rounded bg-gray-50 dark:bg-gray-700/50 space-y-2">
+                  {/* 1행: HEX 입력 | 라벨 입력 */}
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={customColorValue}
+                      onChange={(e) => {
+                        let val = e.target.value;
+                        if (!val.startsWith('#')) val = '#' + val;
+                        setCustomColorValue(val.toUpperCase().slice(0, 7));
+                      }}
+                      placeholder="#000000"
+                      className={clsx(
+                        'w-1/2 px-1.5 py-1 text-xs rounded border font-mono',
+                        'border-gray-300 dark:border-gray-600',
+                        'bg-white dark:bg-gray-700',
+                        'text-gray-800 dark:text-white',
+                        /^#[0-9A-Fa-f]{6}$/.test(customColorValue) ? '' : 'border-red-400'
+                      )}
+                    />
+                    <input
+                      type="text"
+                      value={customColorLabel}
+                      onChange={(e) => setCustomColorLabel(e.target.value)}
+                      placeholder="라벨"
+                      className={clsx(
+                        'w-1/2 px-1.5 py-1 text-xs rounded border',
+                        'border-gray-300 dark:border-gray-600',
+                        'bg-white dark:bg-gray-700',
+                        'text-gray-800 dark:text-white'
+                      )}
+                    />
+                  </div>
+                  {/* 2행: Color Picker | 테두리 체크박스 */}
+                  <div className="flex gap-1">
+                    <input
+                      type="color"
+                      value={/^#[0-9A-Fa-f]{6}$/.test(customColorValue) ? customColorValue : '#000000'}
+                      onChange={(e) => setCustomColorValue(e.target.value.toUpperCase())}
+                      className="w-1/2 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
+                      style={{ padding: 0 }}
+                    />
+                    <label className="w-1/2 flex items-center justify-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer bg-white dark:bg-gray-700 rounded border border-gray-300 dark:border-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={customColorHasBorder}
+                        onChange={(e) => setCustomColorHasBorder(e.target.checked)}
+                        className="w-3 h-3"
+                      />
+                      테두리
+                    </label>
+                  </div>
+                  {/* 3행: 추가 버튼 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customColorLabel.trim() && /^#[0-9A-Fa-f]{6}$/.test(customColorValue)) {
+                        addCustomColor({
+                          value: customColorValue,
+                          label: customColorLabel.trim(),
+                          hasBorder: customColorHasBorder,
+                        });
+                        setEditColor(customColorValue);
+                        setCustomColorValue('#000000');
+                        setCustomColorLabel('');
+                        setCustomColorHasBorder(true);
+                        setShowCustomColorInput(false);
+                      }
+                    }}
+                    disabled={!customColorLabel.trim() || !/^#[0-9A-Fa-f]{6}$/.test(customColorValue)}
+                    className={clsx(
+                      'w-full py-1.5 text-xs rounded font-medium',
+                      customColorLabel.trim() && /^#[0-9A-Fa-f]{6}$/.test(customColorValue)
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    )}
+                  >
+                    추가
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex gap-1 pt-1">
               <button
@@ -626,8 +822,8 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
         />
       )}
 
-      {/* 삭제 확인 다이얼로그 */}
-      {showDeleteConfirm && (
+      {/* 삭제 확인 다이얼로그 - Portal로 렌더링 */}
+      {showDeleteConfirm && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* 배경 오버레이 */}
           <div
@@ -702,7 +898,8 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

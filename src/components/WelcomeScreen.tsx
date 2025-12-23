@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useOrgChartStore } from '@/store/orgChartStore';
 import { parseExcelFile } from '@/utils/excelParser';
 import FileUpload from './FileUpload';
@@ -10,6 +10,13 @@ interface DataFile {
   name: string;
   description: string;
   path: string;
+}
+
+interface SavedFile {
+  id: string;
+  fileName: string;
+  savedAt: string;
+  displayName: string;
 }
 
 interface WelcomeScreenProps {
@@ -25,7 +32,22 @@ export default function WelcomeScreen({
 }: WelcomeScreenProps) {
   const { cachedFiles, loadFromCache, deleteFromCache, setOrgChart, saveToCache } = useOrgChartStore();
   const [dataFiles, setDataFiles] = useState<DataFile[]>([]);
+  const [savedFiles, setSavedFiles] = useState<SavedFile[]>([]);
   const [loadingFile, setLoadingFile] = useState<string | null>(null);
+  const [loadingSavedFile, setLoadingSavedFile] = useState<string | null>(null);
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editingFileName, setEditingFileName] = useState('');
+
+  // 저장된 파일 목록 가져오기
+  const fetchSavedFiles = useCallback(async () => {
+    try {
+      const response = await fetch('/api/saved-files');
+      const data = await response.json();
+      setSavedFiles(data.files || []);
+    } catch (err) {
+      console.log('No saved files found:', err);
+    }
+  }, []);
 
   // data 폴더의 파일 목록 가져오기
   useEffect(() => {
@@ -37,7 +59,10 @@ export default function WelcomeScreen({
       .catch(err => {
         console.log('No data files found:', err);
       });
-  }, []);
+
+    // 저장된 파일 목록도 가져오기
+    fetchSavedFiles();
+  }, [fetchSavedFiles]);
 
   // data 폴더의 파일 로드
   const handleLoadDataFile = async (file: DataFile) => {
@@ -75,6 +100,100 @@ export default function WelcomeScreen({
     } finally {
       setLoadingFile(null);
     }
+  };
+
+  // 저장된 파일 로드
+  const handleLoadSavedFile = async (file: SavedFile) => {
+    setLoadingSavedFile(file.id);
+    try {
+      const response = await fetch(`/api/saved-files/${file.id}`);
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || '파일을 불러올 수 없습니다.');
+      }
+
+      setOrgChart({
+        employees: result.data.employees || [],
+        rootNodes: result.data.rootNodes || [],
+        fileName: result.data.fileName || file.fileName,
+        isDirty: false,
+      });
+
+      onFileUpload();
+    } catch (error) {
+      console.error('저장된 파일 로드 오류:', error);
+      onError([error instanceof Error ? error.message : '파일을 불러오는 중 오류가 발생했습니다.']);
+    } finally {
+      setLoadingSavedFile(null);
+    }
+  };
+
+  // 저장된 파일 삭제
+  const handleDeleteSavedFile = async (e: React.MouseEvent, fileId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('이 저장 파일을 삭제하시겠습니까?')) return;
+
+    try {
+      const response = await fetch(`/api/saved-files?id=${fileId}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        fetchSavedFiles();
+      } else {
+        throw new Error(result.error || '삭제에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('삭제 오류:', error);
+      onError([error instanceof Error ? error.message : '파일 삭제 중 오류가 발생했습니다.']);
+    }
+  };
+
+  // 파일 이름 변경 시작
+  const handleStartRename = (e: React.MouseEvent, file: SavedFile) => {
+    e.stopPropagation();
+    setEditingFileId(file.id);
+    setEditingFileName(file.fileName);
+  };
+
+  // 파일 이름 변경 저장
+  const handleSaveRename = async (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (!editingFileId || !editingFileName.trim()) return;
+
+    try {
+      const response = await fetch('/api/saved-files', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: editingFileId,
+          newFileName: editingFileName.trim(),
+        }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        fetchSavedFiles();
+        setEditingFileId(null);
+        setEditingFileName('');
+      } else {
+        throw new Error(result.error || '이름 변경에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('이름 변경 오류:', error);
+      onError([error instanceof Error ? error.message : '이름 변경 중 오류가 발생했습니다.']);
+    }
+  };
+
+  // 파일 이름 변경 취소
+  const handleCancelRename = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingFileId(null);
+    setEditingFileName('');
   };
 
   const formatDate = (date: Date | string) => {
@@ -159,7 +278,131 @@ export default function WelcomeScreen({
           </div>
         )}
 
-        {/* 최근 작업 파일 목록 */}
+        {/* 저장된 파일 목록 (작업중인 파일) */}
+        {savedFiles.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              작업중인 파일
+            </h3>
+            <div className="space-y-2">
+              {savedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className={clsx(
+                    'flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all',
+                    'bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm',
+                    'border border-gray-200/50 dark:border-gray-700/50',
+                    'hover:bg-white dark:hover:bg-gray-800 hover:shadow-md',
+                    'group',
+                    loadingSavedFile === file.id && 'opacity-70 pointer-events-none'
+                  )}
+                  onClick={() => !loadingSavedFile && editingFileId !== file.id && handleLoadSavedFile(file)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                      {loadingSavedFile === file.id ? (
+                        <svg className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {editingFileId === file.id ? (
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editingFileName}
+                            onChange={(e) => setEditingFileName(e.target.value)}
+                            className={clsx(
+                              'flex-1 px-2 py-1 text-sm rounded border',
+                              'border-purple-300 dark:border-purple-600',
+                              'bg-white dark:bg-gray-700',
+                              'text-gray-800 dark:text-white',
+                              'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                            )}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRename(e);
+                              if (e.key === 'Escape') {
+                                setEditingFileId(null);
+                                setEditingFileName('');
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleSaveRename}
+                            className="p-1 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            title="저장"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={handleCancelRename}
+                            className="p-1 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            title="취소"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-medium text-gray-800 dark:text-white truncate">
+                            {file.fileName}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {formatDate(file.savedAt)} · {file.displayName}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {editingFileId !== file.id && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleStartRename(e, file)}
+                        className={clsx(
+                          'opacity-0 group-hover:opacity-100 transition-opacity',
+                          'p-2 rounded-lg text-gray-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                        )}
+                        title="이름 변경"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteSavedFile(e, file.id)}
+                        className={clsx(
+                          'opacity-0 group-hover:opacity-100 transition-opacity',
+                          'p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                        )}
+                        title="삭제"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 최근 작업 파일 목록 (캐시) */}
         {cachedFiles.length > 0 && (
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">

@@ -259,23 +259,6 @@ body {
   margin: 0;
 }
 
-/* 자식들 사이를 연결하는 수평선 */
-.tree-children::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  height: 2px;
-  background-color: #cbd5e1;
-  /* 99px = 15px padding + 84px (half of node width 168px) */
-  left: 99px;
-  right: 99px;
-}
-
-/* 자식이 1개일 때는 수평선 숨김 */
-.tree-children:has(> .tree-node:only-child)::before {
-  display: none;
-}
-
 /* 각 자식 노드 */
 .tree-children > .tree-node {
   position: relative;
@@ -294,25 +277,25 @@ body {
   background-color: #cbd5e1;
 }
 
-/* 첫번째/마지막 자식의 수평선 위치 조정 */
-.tree-children > .tree-node:first-child::after {
+/* 자식들 사이를 연결하는 수평선 - 각 자식이 자신의 영역에서 수평선 그리기 */
+.tree-children > .tree-node::after {
   content: '';
   position: absolute;
   top: 0;
-  left: 50%;
-  width: 50%;
+  left: 0;
+  right: 0;
   height: 2px;
   background-color: #cbd5e1;
 }
 
+/* 첫번째 자식은 중앙에서 오른쪽까지만 */
+.tree-children > .tree-node:first-child::after {
+  left: 50%;
+}
+
+/* 마지막 자식은 왼쪽에서 중앙까지만 */
 .tree-children > .tree-node:last-child::after {
-  content: '';
-  position: absolute;
-  top: 0;
   right: 50%;
-  width: 50%;
-  height: 2px;
-  background-color: #cbd5e1;
 }
 
 /* 자식이 1개일 때 수평선 숨김 */
@@ -321,7 +304,6 @@ body {
 }
 
 /* 다크모드 연결선 */
-.dark .tree-children::before,
 .dark .tree-children > .tree-node::before,
 .dark .tree-children > .tree-node::after,
 .dark .tree-vertical-line {

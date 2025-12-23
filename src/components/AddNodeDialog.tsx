@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { Employee } from '@/types';
 import clsx from 'clsx';
 
@@ -74,6 +75,18 @@ export default function AddNodeDialog({
     if (!selectedLeaderIdFromTransfer) return null;
     return parentMembers.find(m => m.employeeId === selectedLeaderIdFromTransfer) || null;
   }, [selectedLeaderIdFromTransfer, parentMembers]);
+
+  // 다이얼로그 열릴 때 body 스크롤 잠금
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
 
   // 초기화
   const handleClose = useCallback(() => {
@@ -283,7 +296,8 @@ export default function AddNodeDialog({
   const totalSteps = transferableMembers.length > 0 ? 3 : 2;
   const currentStep = step === 'info' ? 1 : step === 'transfer' ? 2 : totalSteps;
 
-  return (
+  // Portal을 사용하여 document.body에 직접 렌더링 (transform 컨테이너 외부)
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 배경 오버레이 */}
       <div
@@ -723,7 +737,8 @@ export default function AddNodeDialog({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

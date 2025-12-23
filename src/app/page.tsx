@@ -11,18 +11,22 @@ import clsx from 'clsx';
 type ViewMode = 'welcome' | 'chart' | 'editor';
 
 export default function Home() {
-  const { rootNodes, reset } = useOrgChartStore();
+  const { rootNodes, employees, fileName, lastImportDate, reset } = useOrgChartStore();
   const [viewMode, setViewMode] = useState<ViewMode>('welcome');
   const [zoom, setZoom] = useState(1);
   const [errors, setErrors] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const initialLoadRef = useRef(true);
 
-  // 조직도 데이터가 있으면 차트 뷰로 전환
+  // 초기 로드 시에만 조직도 데이터가 있으면 차트 뷰로 전환
+  // (사용자가 의도적으로 홈으로 이동할 수 있도록 초기 로드 후에는 자동 전환하지 않음)
   useEffect(() => {
-    if (rootNodes.length > 0 && viewMode === 'welcome') {
+    if (initialLoadRef.current && rootNodes.length > 0 && viewMode === 'welcome') {
       setViewMode('chart');
     }
+    initialLoadRef.current = false;
   }, [rootNodes, viewMode]);
 
   // 파일 업로드 성공
@@ -53,6 +57,12 @@ export default function Home() {
     }
   }, [viewMode]);
 
+  // 첫 화면으로 이동
+  const handleGoHome = useCallback(() => {
+    setViewMode('welcome');
+    setErrors([]);
+  }, []);
+
   // 줌 컨트롤
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 0.1, 2));
@@ -70,22 +80,65 @@ export default function Home() {
     setZoom(1);
   }, []);
 
-  // ESC 키로 드래그 모드 취소
+  // 저장하기
+  const handleSave = useCallback(async () => {
+    if (rootNodes.length === 0 || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rootNodes,
+          employees,
+          fileName: fileName || 'untitled',
+          lastImportDate,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        // 토스트 알림 대신 간단한 표시
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-in fade-in slide-in-from-bottom-4';
+        toast.textContent = `저장 완료: ${result.fileName}`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+      } else {
+        throw new Error(result.error || '저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      alert(error instanceof Error ? error.message : '저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [rootNodes, employees, fileName, lastImportDate, isSaving]);
+
+  // ESC 키로 드래그 모드 취소, Ctrl+S로 저장
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         useOrgChartStore.getState().setDragMode(false);
         useOrgChartStore.getState().setSelectedNode(null);
       }
+      // Ctrl+S 또는 Cmd+S로 저장
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleSave]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <Header onImport={handleImportClick} />
+      <Header onImport={handleImportClick} isSaving={isSaving} onSave={handleSave} onHome={handleGoHome} viewMode={viewMode} />
 
       {/* 에러 알림 */}
       {errors.length > 0 && (
@@ -124,24 +177,26 @@ export default function Home() {
           onError={handleError}
         />
       ) : (
-        <div className="pt-16 h-screen flex flex-col">
-          {/* 조직도 컨테이너 */}
-          <div
-            ref={containerRef}
-            className="flex-1 overflow-auto relative"
-          >
+        <>
+          <div className="pt-16 h-screen flex flex-col">
+            {/* 조직도 컨테이너 */}
             <div
-              style={{
-                transform: `scale(${zoom})`,
-                transformOrigin: 'top left',
-                minWidth: 'fit-content',
-              }}
+              ref={containerRef}
+              className="flex-1 overflow-auto relative"
             >
-              <OrgTree />
+              <div
+                style={{
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'top left',
+                  minWidth: 'fit-content',
+                }}
+              >
+                <OrgTree />
+              </div>
             </div>
           </div>
 
-          {/* 줌 컨트롤 */}
+          {/* 줌 컨트롤 - flex 컨테이너 외부에 배치하여 레이아웃 간섭 방지 */}
           <ZoomControls
             zoom={zoom}
             onZoomIn={handleZoomIn}
@@ -149,7 +204,7 @@ export default function Home() {
             onFit={handleFit}
             onReset={handleReset}
           />
-        </div>
+        </>
       )}
 
       {/* Import 모달 */}

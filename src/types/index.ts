@@ -92,6 +92,13 @@ export type ExportFormat = 'xlsx' | 'png' | 'pdf';
 // 테마 설정
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+// 커스텀 색상
+export interface CustomColor {
+  value: string;        // 헥사 코드 (예: #FF0000)
+  label: string;        // 라벨 (예: '긴급')
+  hasBorder: boolean;   // 테두리 표시 여부
+}
+
 // 앱 설정
 export interface AppSettings {
   theme: ThemeMode;
@@ -101,4 +108,5 @@ export interface AppSettings {
     default: string;
     executive: string;
   };
+  customColors?: CustomColor[];  // 사용자 정의 색상 목록
 }

@@ -127,9 +127,9 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
     const levels = emp.levels;
     let parentId: string | undefined = undefined;
 
-    // 레벨2부터 8까지 순회 (레벨1 이사회는 표시하지 않음, 레벨3 CEO는 스킵)
+    // 레벨2부터 8까지 순회 (레벨1 이사회는 표시하지 않음, 레벨3은 레벨2 겸직이므로 스킵)
     for (let i = 2; i <= 8; i++) {
-      // 레벨3 (CEO)는 스킵
+      // 레벨3은 스킵 (레벨2의 겸직)
       if (i === 3) continue;
 
       const levelKey = `level${i}` as keyof typeof levels;
@@ -148,7 +148,7 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
       const orgId = `org_${orgPath}_${levelValue}`.replace(/\s+/g, '_');
 
       if (!orgMap.has(orgId)) {
-        // 실제 표시 레벨 계산 (레벨3 스킵으로 인해 조정)
+        // 실제 표시 레벨 계산 (레벨3 스킵으로 인해 조정: 2→2, 4→3, 5→4, ...)
         const displayLevel = i === 2 ? 2 : i - 1;
 
         const newNode: OrgNode = {
@@ -192,7 +192,13 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
         }
 
         // 조직장 설정 (외주직이어도 조직장 이름은 표시)
-        if (emp.isLeader) {
+        // LEVEL3에만 값이 있는 경우 (LEVEL4 이상 없음)는 LEVEL2의 조직장이 아님
+        // (LEVEL3는 LEVEL2의 겸직이므로)
+        const hasLevel3Only = emp.levels.level3 &&
+          !emp.levels.level4 && !emp.levels.level5 &&
+          !emp.levels.level6 && !emp.levels.level7 && !emp.levels.level8;
+
+        if (emp.isLeader && !hasLevel3Only) {
           finalOrg.leader = {
             name: emp.name,
             isExecutive: emp.employmentType === '임원',

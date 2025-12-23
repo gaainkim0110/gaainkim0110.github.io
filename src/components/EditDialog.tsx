@@ -1,18 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import type { OrgNode, Employee } from '@/types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import type { OrgNode, Employee, CustomColor } from '@/types';
+import { useOrgChartStore } from '@/store/orgChartStore';
 import clsx from 'clsx';
 
-// 노드 색상 옵션
-const COLOR_OPTIONS = [
-  { value: 'default', label: 'Default', color: 'transparent', isDefault: true },
-  { value: '#70AD47', label: '레벨2', color: '#70AD47', isDefault: false },
-  { value: '#002060', label: '레벨4', color: '#002060', isDefault: false },
-  { value: '#419CFF', label: '수정', color: '#419CFF', isDefault: false },
-  { value: '#AAAAAA', label: '임원', color: '#AAAAAA', isDefault: false },
-  { value: '#000000', label: '폐지', color: '#000000', isDefault: false },
+// 기본 노드 색상 옵션
+const DEFAULT_COLOR_OPTIONS = [
+  { value: 'default', label: 'Default', color: 'transparent', isDefault: true, hasBorder: false },
+  { value: '#FFFFFF', label: '일반', color: '#FFFFFF', isDefault: false, hasBorder: false },
+  { value: '#70AD47', label: '레벨2', color: '#70AD47', isDefault: false, hasBorder: false },
+  { value: '#002060', label: '레벨4', color: '#002060', isDefault: false, hasBorder: false },
+  { value: '#419CFF', label: '수정', color: '#419CFF', isDefault: false, hasBorder: true },
+  { value: '#FF6861', label: '신설', color: '#FF6861', isDefault: false, hasBorder: true },
+  { value: '#AAAAAA', label: '임원', color: '#AAAAAA', isDefault: false, hasBorder: false },
+  { value: '#000000', label: '폐지', color: '#000000', isDefault: false, hasBorder: true },
 ] as const;
+
+// 헥사 코드 유효성 검사
+const isValidHexColor = (hex: string): boolean => {
+  return /^#[0-9A-Fa-f]{6}$/.test(hex);
+};
 
 interface EditDialogProps {
   node: OrgNode;
@@ -27,6 +36,9 @@ interface EditDialogProps {
 }
 
 export default function EditDialog({ node, isOpen, onClose, onSave }: EditDialogProps) {
+  const { settings, addCustomColor, removeCustomColor } = useOrgChartStore();
+  const customColors = settings.customColors || [];
+
   const [orgName, setOrgName] = useState(node.name);
   const [leaderName, setLeaderName] = useState(node.leader?.name || '');
   const [members, setMembers] = useState<Employee[]>([...node.members]);
@@ -34,6 +46,25 @@ export default function EditDialog({ node, isOpen, onClose, onSave }: EditDialog
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberId, setNewMemberId] = useState('');
   const [newMemberRelation, setNewMemberRelation] = useState<'원소속' | '겸직'>('원소속');
+
+  // 커스텀 색상 추가 상태
+  const [showAddColor, setShowAddColor] = useState(false);
+  const [newColorHex, setNewColorHex] = useState('#000000');
+  const [newColorLabel, setNewColorLabel] = useState('');
+  const [newColorHasBorder, setNewColorHasBorder] = useState(false);
+
+  // 전체 색상 옵션 (기본 + 커스텀)
+  const allColorOptions = useMemo(() => {
+    const customOpts = customColors.map((c: CustomColor) => ({
+      value: c.value,
+      label: c.label,
+      color: c.value,
+      isDefault: false,
+      hasBorder: c.hasBorder,
+      isCustom: true,
+    }));
+    return [...DEFAULT_COLOR_OPTIONS, ...customOpts];
+  }, [customColors]);
 
   // node가 변경되면 상태 업데이트
   useEffect(() => {
@@ -56,6 +87,18 @@ export default function EditDialog({ node, isOpen, onClose, onSave }: EditDialog
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  // 다이얼로그 열릴 때 body 스크롤 잠금
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
 
   // 팀원 삭제
   const handleRemoveMember = useCallback((employeeId: string) => {
@@ -122,7 +165,8 @@ export default function EditDialog({ node, isOpen, onClose, onSave }: EditDialog
 
   if (!isOpen) return null;
 
-  return (
+  // Portal을 사용하여 document.body에 직접 렌더링 (transform 컨테이너 외부)
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 배경 오버레이 */}
       <div
@@ -341,31 +385,172 @@ export default function EditDialog({ node, isOpen, onClose, onSave }: EditDialog
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               노드 색상
             </label>
+
+            {/* 커스텀 색상 추가 폼 */}
+            {showAddColor && (
+              <div className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                <div className="flex flex-wrap gap-3 items-end">
+                  {/* 색상 선택 (Color Picker) */}
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">색상 선택</label>
+                    <input
+                      type="color"
+                      value={isValidHexColor(newColorHex) ? newColorHex : '#000000'}
+                      onChange={(e) => setNewColorHex(e.target.value.toUpperCase())}
+                      className="w-20 h-10 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
+                      style={{ padding: 0 }}
+                    />
+                  </div>
+                  {/* HEX 코드 표시 */}
+                  <div className="flex-1 min-w-[80px]">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">HEX 코드</label>
+                    <input
+                      type="text"
+                      value={newColorHex}
+                      onChange={(e) => {
+                        let val = e.target.value;
+                        if (!val.startsWith('#')) val = '#' + val;
+                        setNewColorHex(val.toUpperCase().slice(0, 7));
+                      }}
+                      placeholder="#FF0000"
+                      className={clsx(
+                        'w-full px-2 py-1.5 text-sm rounded border font-mono',
+                        'border-gray-300 dark:border-gray-600',
+                        'bg-white dark:bg-gray-700',
+                        'text-gray-800 dark:text-white',
+                        isValidHexColor(newColorHex) ? 'focus:ring-2 focus:ring-blue-500' : 'border-red-400'
+                      )}
+                    />
+                  </div>
+                  {/* 라벨 */}
+                  <div className="flex-1 min-w-[70px]">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">라벨</label>
+                    <input
+                      type="text"
+                      value={newColorLabel}
+                      onChange={(e) => setNewColorLabel(e.target.value)}
+                      placeholder="이름"
+                      className={clsx(
+                        'w-full px-2 py-1.5 text-sm rounded border',
+                        'border-gray-300 dark:border-gray-600',
+                        'bg-white dark:bg-gray-700',
+                        'text-gray-800 dark:text-white'
+                      )}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newColorHasBorder}
+                      onChange={(e) => setNewColorHasBorder(e.target.checked)}
+                      className="w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-gray-600 dark:text-gray-300">테두리 표시</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isValidHexColor(newColorHex) && newColorLabel.trim()) {
+                        addCustomColor({
+                          value: newColorHex,
+                          label: newColorLabel.trim(),
+                          hasBorder: newColorHasBorder,
+                        });
+                        setNewColorHex('#000000');
+                        setNewColorLabel('');
+                        setNewColorHasBorder(false);
+                        setShowAddColor(false);
+                      }
+                    }}
+                    disabled={!isValidHexColor(newColorHex) || !newColorLabel.trim()}
+                    className={clsx(
+                      'px-4 py-1.5 rounded text-sm font-medium transition-colors',
+                      isValidHexColor(newColorHex) && newColorLabel.trim()
+                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-600'
+                    )}
+                  >
+                    추가
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
-              {COLOR_OPTIONS.map((option) => (
+              {allColorOptions.map((option) => (
+                <div key={option.value} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => setNodeColor(option.value)}
+                    className={clsx(
+                      'flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all',
+                      nodeColor === option.value
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                    )}
+                  >
+                    <span
+                      className="w-5 h-5 rounded"
+                      style={option.isDefault ? {
+                        backgroundColor: 'white',
+                        backgroundImage: 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
+                        border: '1px solid #ccc'
+                      } : option.value === '#FFFFFF' ? {
+                        backgroundColor: option.color,
+                        border: '2px solid #d1d5db'
+                      } : {
+                        backgroundColor: option.color,
+                        border: option.hasBorder ? `2px solid ${option.color}` : '1px solid #ccc'
+                      }}
+                    />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">
+                      {option.isDefault ? 'Default' : option.label}
+                    </span>
+                    {option.hasBorder && !option.isDefault && (
+                      <span className="text-[10px] bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 px-1 rounded">
+                        B
+                      </span>
+                    )}
+                  </button>
+                  {/* 커스텀 색상 삭제 버튼 */}
+                  {'isCustom' in option && option.isCustom && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeCustomColor(option.value);
+                        if (nodeColor === option.value) {
+                          setNodeColor('default');
+                        }
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                      title="삭제"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              {/* 색상 추가 버튼 */}
+              <div className="relative group">
                 <button
-                  key={option.value}
                   type="button"
-                  onClick={() => setNodeColor(option.value)}
+                  onClick={() => setShowAddColor(!showAddColor)}
+                  title="색상 추가"
                   className={clsx(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all',
-                    nodeColor === option.value
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                    'flex items-center justify-center px-2 py-1.5 rounded-lg border-2 transition-all',
+                    'border-dashed border-gray-400 dark:border-gray-500',
+                    'hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20',
+                    showAddColor && 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                   )}
                 >
-                  <span
-                    className="w-5 h-5 rounded border border-gray-300 dark:border-gray-500"
-                    style={option.isDefault ? {
-                      backgroundColor: 'white',
-                      backgroundImage: 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)'
-                    } : { backgroundColor: option.color }}
-                  />
-                  <span className="text-xs text-gray-700 dark:text-gray-300">
-                    {option.isDefault ? 'Default (자동)' : option.label}
-                  </span>
+                  <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
                 </button>
-              ))}
+              </div>
             </div>
           </div>
         </div>
@@ -393,6 +578,7 @@ export default function EditDialog({ node, isOpen, onClose, onSave }: EditDialog
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
