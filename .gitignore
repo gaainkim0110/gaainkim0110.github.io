@@ -41,4 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 # sample data
-sample_org_data.xlsx
+public/data/sample_org_data.xlsx
+
+# saved org chart files
+public/data/saved/
