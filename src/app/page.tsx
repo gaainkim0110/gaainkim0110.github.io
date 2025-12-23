@@ -129,12 +129,16 @@ export default function Home() {
           <div
             ref={containerRef}
             className="flex-1 overflow-auto relative"
-            style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top center',
-            }}
           >
-            <OrgTree />
+            <div
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top left',
+                minWidth: 'fit-content',
+              }}
+            >
+              <OrgTree />
+            </div>
           </div>
 
           {/* 줌 컨트롤 */}

@@ -14,6 +14,8 @@ const MODIFIED_COLOR = '#419CFF';
 const LEVEL4_COLOR = '#002060';
 // 삭제 예정 노드 색상
 const DELETED_COLOR = '#000000';
+// 인원수 카운트 및 팀원 목록 표시 대상 고용형태
+const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
 
 // 노드 색상 옵션
 const COLOR_OPTIONS = [
@@ -438,42 +440,51 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
       </div>
 
       {/* 팀원 목록 패널 (leaf 노드 클릭 시) */}
-      {showMembers && isLeaf && (
-        <div className={clsx(
-          'mt-4 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-3 min-w-[140px]',
-          'animate-expand origin-top',
-          'dark:bg-gray-800/80 dark:text-white'
-        )}>
-          <div className="text-xs font-semibold mb-2 text-gray-600 dark:text-gray-300">
-            팀원 목록 ({node.members.filter(m => m.relation === '원소속').length}/{node.members.filter(m => m.relation === '겸직').length})
+      {showMembers && isLeaf && (() => {
+        // 임원, 정규_일반직, 정규직만 필터링
+        const filteredMembers = node.members.filter(m =>
+          COUNTABLE_EMPLOYMENT_TYPES.includes(m.employmentType)
+        );
+        const originalCount = filteredMembers.filter(m => m.relation === '원소속').length;
+        const concurrentCount = filteredMembers.filter(m => m.relation === '겸직').length;
+
+        return (
+          <div className={clsx(
+            'mt-4 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-3 min-w-[140px]',
+            'animate-expand origin-top',
+            'dark:bg-gray-800/80 dark:text-white'
+          )}>
+            <div className="text-xs font-semibold mb-2 text-gray-600 dark:text-gray-300">
+              팀원 목록 ({originalCount}/{concurrentCount})
+            </div>
+            <ul className="space-y-1">
+              {[...filteredMembers]
+                .sort((a, b) => {
+                  // 조직장이 맨 위
+                  if (a.isLeader && !b.isLeader) return -1;
+                  if (!a.isLeader && b.isLeader) return 1;
+                  // 그 외는 한글 가나다 순 정렬
+                  return a.name.localeCompare(b.name, 'ko');
+                })
+                .map((member) => (
+                <li
+                  key={member.employeeId}
+                  className="text-xs text-gray-700 dark:text-gray-200 flex items-center gap-1"
+                >
+                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                  {member.name}
+                  {member.isLeader && (
+                    <span className="text-blue-500 text-[10px]">(조직장)</span>
+                  )}
+                  {member.relation === '겸직' && (
+                    <span className="text-orange-500 text-[10px]">(겸)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="space-y-1">
-            {[...node.members]
-              .sort((a, b) => {
-                // 조직장이 맨 위
-                if (a.isLeader && !b.isLeader) return -1;
-                if (!a.isLeader && b.isLeader) return 1;
-                // 그 외는 한글 가나다 순 정렬
-                return a.name.localeCompare(b.name, 'ko');
-              })
-              .map((member) => (
-              <li
-                key={member.employeeId}
-                className="text-xs text-gray-700 dark:text-gray-200 flex items-center gap-1"
-              >
-                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                {member.name}
-                {member.isLeader && (
-                  <span className="text-blue-500 text-[10px]">(조직장)</span>
-                )}
-                {member.relation === '겸직' && (
-                  <span className="text-orange-500 text-[10px]">(겸)</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 액션 버튼들 (더블클릭 시) */}
       {showActions && !isDragMode && (
