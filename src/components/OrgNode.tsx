@@ -30,6 +30,12 @@ const isLightColor = (hexColor: string): boolean => {
 };
 // 인원수 카운트 및 팀원 목록 표시 대상 고용형태
 const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
+
+// 인원수 집계 대상 여부 확인 (사번이 KR로 시작하고 고용형태가 대상인 경우만)
+const isCountableEmployee = (employee: Employee): boolean => {
+  return employee.employeeId.startsWith('KR') &&
+         COUNTABLE_EMPLOYMENT_TYPES.includes(employee.employmentType);
+};
 // 기본 Border가 표시되어야 하는 색상들 (수정, 폐지, 신설)
 const DEFAULT_BORDER_COLORS = [MODIFIED_COLOR, DELETED_COLOR, NEW_COLOR];
 
@@ -378,11 +384,13 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     });
   }, [node.id, node.level, node.members, addNode, updateNode]);
 
-  // 인원수 표시 (엑셀 레벨6 이상에서만 원소속/겸직 구분)
+  // 인원수 표시 (레벨3 이상에서 원소속/겸직 구분)
+  // node.memberCount와 node.concurrentCount는 excelParser에서 하위 조직 포함하여 집계된 값
   const getMemberCountDisplay = () => {
-    // 엑셀 레벨6 (displayLevel 5) 이상에서만 원소속/겸직 구분
-    if (node.level >= 5 && node.concurrentCount > 0) {
-      const originalCount = node.memberCount - node.concurrentCount;
+    const originalCount = node.memberCount - node.concurrentCount;
+
+    // 레벨2만 합쳐서 표기, 레벨3 이상부터 원소속/겸직 구분
+    if (node.level >= 3 && node.concurrentCount > 0) {
       return `${originalCount}/${node.concurrentCount}`;
     }
     return String(node.memberCount);
@@ -522,10 +530,8 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
 
       {/* 팀원 목록 패널 (leaf 노드 클릭 시) */}
       {showMembers && isLeaf && (() => {
-        // 임원, 정규_일반직, 정규직만 필터링
-        const filteredMembers = node.members.filter(m =>
-          COUNTABLE_EMPLOYMENT_TYPES.includes(m.employmentType)
-        );
+        // 사번 KR 시작 + 고용형태 조건으로 필터링
+        const filteredMembers = node.members.filter(isCountableEmployee);
         const originalCount = filteredMembers.filter(m => m.relation === '원소속').length;
         const concurrentCount = filteredMembers.filter(m => m.relation === '겸직').length;
 

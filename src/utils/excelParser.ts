@@ -213,12 +213,12 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
   const rootNodes = Array.from(orgMap.values()).filter(node => node.level === 2);
 
   // Helper: 노드와 모든 하위 노드에서 직원 수집 (사번 기준 중복 제거)
-  const collectAllMembersInNode = (node: OrgNode): Map<string, { relation: string; employmentType: string }> => {
-    const memberMap = new Map<string, { relation: string; employmentType: string }>();
+  const collectAllMembersInNode = (node: OrgNode): Map<string, { employeeId: string; relation: string; employmentType: string }> => {
+    const memberMap = new Map<string, { employeeId: string; relation: string; employmentType: string }>();
 
     // 현재 노드의 멤버 추가
     node.members.forEach(m => {
-      memberMap.set(m.employeeId, { relation: m.relation, employmentType: m.employmentType });
+      memberMap.set(m.employeeId, { employeeId: m.employeeId, relation: m.relation, employmentType: m.employmentType });
     });
 
     // 하위 노드들의 멤버 수집
@@ -238,8 +238,14 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
   // 인원수 카운트 대상 고용형태
   const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
 
+  // 인원수 집계 대상 여부 확인 (사번이 KR로 시작하고 고용형태가 대상인 경우만)
+  const isCountableEmployee = (emp: { employeeId: string; employmentType: string }): boolean => {
+    return emp.employeeId.startsWith('KR') &&
+           COUNTABLE_EMPLOYMENT_TYPES.includes(emp.employmentType);
+  };
+
   // 각 노드의 총 인원수 계산 (하위 조직 포함, 사번 기준 중복 제거)
-  // 임원, 정규_일반직, 정규직만 인원수에 포함
+  // 사번이 KR로 시작하고 임원, 정규_일반직, 정규직만 인원수에 포함
   const calculateTotalMembers = (node: OrgNode): void => {
     // 먼저 하위 노드들의 인원수 계산
     node.children.forEach(child => {
@@ -249,10 +255,8 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
     // 현재 노드와 모든 하위 노드에서 고유한 직원 수집
     const allMembers = collectAllMembersInNode(node);
 
-    // 고유 직원 수 계산 (임원, 정규_일반직, 정규직만 포함)
-    const countableMembers = Array.from(allMembers.values()).filter(m =>
-      COUNTABLE_EMPLOYMENT_TYPES.includes(m.employmentType)
-    );
+    // 고유 직원 수 계산 (사번 KR 시작 + 고용형태 조건)
+    const countableMembers = Array.from(allMembers.values()).filter(isCountableEmployee);
     node.memberCount = countableMembers.length;
     node.concurrentCount = countableMembers.filter(m => m.relation === '겸직').length;
   };
