@@ -412,6 +412,27 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     return 'text-[10px]';
   };
 
+  // 조직장 이름 길이에 따른 폰트 사이즈 계산
+  const getLeaderFontSize = () => {
+    const leaderText = getLeaderDisplay();
+    if (!leaderText) return 'text-sm';
+    const len = leaderText.length;
+    if (len <= 5) return 'text-sm';
+    if (len <= 7) return 'text-xs';
+    if (len <= 9) return 'text-[11px]';
+    return 'text-[10px]';
+  };
+
+  // 인원수 길이에 따른 폰트 사이즈 계산
+  const getMemberCountFontSize = () => {
+    const countText = getMemberCountDisplay();
+    const len = countText.length + 1; // +1 for "명"
+    if (len <= 4) return 'text-sm';
+    if (len <= 6) return 'text-xs';
+    if (len <= 8) return 'text-[11px]';
+    return 'text-[10px]';
+  };
+
   return (
     <div ref={nodeRef} className="flex flex-col items-center">
       {/* 노드 본체 */}
@@ -474,9 +495,12 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
         </div>
 
         {/* 조직장 및 인원수 - 테이블 형태 */}
-        <div className="h-[36px] grid grid-cols-2 text-sm text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-700">
+        <div className="h-[36px] grid grid-cols-2 text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-700">
           {/* 조직장 컬럼 */}
-          <div className="px-2 flex items-center justify-center border-r border-gray-100 dark:border-gray-700 truncate">
+          <div className={clsx(
+            'px-2 flex items-center justify-center border-r border-gray-100 dark:border-gray-700 truncate',
+            getLeaderFontSize()
+          )}>
             {hasLeader ? (
               <span className="truncate">{getLeaderDisplay()}</span>
             ) : (
@@ -488,7 +512,10 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
             )}
           </div>
           {/* 인원수 컬럼 */}
-          <div className="px-2 flex items-center justify-center">
+          <div className={clsx(
+            'px-2 flex items-center justify-center',
+            getMemberCountFontSize()
+          )}>
             <span>{getMemberCountDisplay()}명</span>
           </div>
         </div>

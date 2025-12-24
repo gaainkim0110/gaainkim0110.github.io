@@ -56,12 +56,15 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
       return { success: false, errors };
     }
 
+    // NAVER 직원만 필터링
+    const naverEmployees = employees.filter(emp => emp.levels.level2 === 'NAVER');
+
     // 조직도 트리 구조 생성
-    const rootNodes = buildOrgTree(employees);
+    const rootNodes = buildOrgTree(naverEmployees);
 
     return {
       success: true,
-      employees,
+      employees: naverEmployees,
       rootNodes,
       errors: errors.length > 0 ? errors : undefined
     };
@@ -119,11 +122,8 @@ export function buildOrgTree(employees: Employee[]): OrgNode[] {
   // 조직 맵 생성 (레벨별 조직 구조)
   const orgMap = new Map<string, OrgNode>();
 
-  // NAVER 필터링: 레벨2가 "NAVER"인 직원만 사용
-  const filteredEmployees = employees.filter(emp => emp.levels.level2 === 'NAVER');
-
-  // 각 직원을 순회하며 조직 구조 구축
-  filteredEmployees.forEach(emp => {
+  // 각 직원을 순회하며 조직 구조 구축 (이미 NAVER 필터링된 직원들)
+  employees.forEach(emp => {
     const levels = emp.levels;
     let parentId: string | undefined = undefined;
 
