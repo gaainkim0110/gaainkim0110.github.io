@@ -49,9 +49,9 @@ export default function WelcomeScreen({
     }
   }, []);
 
-  // data 폴더의 파일 목록 가져오기
+  // data 폴더의 엑셀 파일 목록 가져오기
   useEffect(() => {
-    fetch('/data/files.json')
+    fetch('/api/data-files')
       .then(res => res.json())
       .then(data => {
         setDataFiles(data.files || []);
