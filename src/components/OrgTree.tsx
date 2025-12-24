@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -35,6 +35,12 @@ export default function OrgTree({ className }: OrgTreeProps) {
   const [showAddFirstNode, setShowAddFirstNode] = useState(false);
   const [firstNodeName, setFirstNodeName] = useState('');
   const [firstNodeLeader, setFirstNodeLeader] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
+
+  // 클라이언트 마운트 확인 (Portal 사용을 위해)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 첫 노드 추가 핸들러
   const handleAddFirstNode = useCallback(() => {
@@ -268,18 +274,6 @@ export default function OrgTree({ className }: OrgTreeProps) {
           className
         )}
       >
-        {/* 드래그 모드 안내 (하단) */}
-        {isDragMode && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-blue-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2">
-            <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
-            </svg>
-            <span>드래그하여 조직을 이동하세요</span>
-            <span className="text-blue-200">|</span>
-            <span className="text-sm">ESC로 취소</span>
-          </div>
-        )}
-
         {/* 조직도 트리 */}
         <ul className="tree-container flex flex-col items-center">
           {rootNodes.map((rootNode) => (
@@ -300,6 +294,19 @@ export default function OrgTree({ className }: OrgTreeProps) {
           </div>
         )}
       </DragOverlay>
+
+      {/* 드래그 모드 안내 (브라우저 하단 - Portal로 document.body에 렌더링) */}
+      {isDragMode && isMounted && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-blue-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2">
+          <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <span>드래그하여 조직을 이동하세요</span>
+          <span className="text-blue-200">|</span>
+          <span className="text-sm">ESC로 취소</span>
+        </div>,
+        document.body
+      )}
     </DndContext>
   );
 }

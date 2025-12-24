@@ -188,7 +188,7 @@ export default function Header({ onImport, isSaving = false, onSave, onHome, vie
               )}>
                 <button
                   onClick={() => handleExport('xlsx')}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                 >
                   <span className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded flex items-center justify-center text-green-600 dark:text-green-400 text-xs font-bold">
                     XLS
@@ -197,7 +197,7 @@ export default function Header({ onImport, isSaving = false, onSave, onHome, vie
                 </button>
                 <button
                   onClick={() => handleExport('png')}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                 >
                   <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded flex items-center justify-center text-blue-600 dark:text-blue-400 text-xs font-bold">
                     PNG
@@ -206,7 +206,7 @@ export default function Header({ onImport, isSaving = false, onSave, onHome, vie
                 </button>
                 <button
                   onClick={() => handleExport('pdf')}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                 >
                   <span className="w-6 h-6 bg-red-100 dark:bg-red-900 rounded flex items-center justify-center text-red-600 dark:text-red-400 text-xs font-bold">
                     PDF

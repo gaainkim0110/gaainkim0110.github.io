@@ -42,6 +42,13 @@ export interface OrgNode {
   isDeleted?: boolean;             // 삭제 예정 여부
 }
 
+// 원본 노드 상태 (수정 여부 비교용)
+export interface OriginalNodeState {
+  name: string;                    // 원본 조직명
+  leaderName?: string;             // 원본 조직장 이름
+  parentId?: string;               // 원본 상위 조직 ID
+}
+
 // 전체 조직도 상태
 export interface OrgChartState {
   rootNodes: OrgNode[];            // 레벨2 노드들 (법인)
@@ -49,6 +56,7 @@ export interface OrgChartState {
   lastImportDate?: Date;           // 마지막 Import 일시
   isDirty: boolean;                // 수정 여부
   fileName?: string;               // 원본 파일명
+  originalNodeStates?: Record<string, OriginalNodeState>;  // 원본 노드 상태 (수정 비교용)
 }
 
 // 캐시 데이터 구조

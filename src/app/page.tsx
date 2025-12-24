@@ -118,17 +118,28 @@ export default function Home() {
     }
   }, [rootNodes, employees, fileName, lastImportDate, isSaving]);
 
-  // ESC 키로 드래그 모드 취소, Ctrl+S로 저장
+  // 키보드 단축키: ESC, Ctrl+S, Ctrl+Z, Ctrl+Shift+Z
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // ESC: 드래그 모드 취소
       if (e.key === 'Escape') {
         useOrgChartStore.getState().setDragMode(false);
         useOrgChartStore.getState().setSelectedNode(null);
       }
-      // Ctrl+S 또는 Cmd+S로 저장
+      // Ctrl+S 또는 Cmd+S: 저장
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleSave();
+      }
+      // Ctrl+Z 또는 Cmd+Z: Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        useOrgChartStore.getState().undo();
+      }
+      // Ctrl+Shift+Z 또는 Cmd+Shift+Z: Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        useOrgChartStore.getState().redo();
       }
     };
 

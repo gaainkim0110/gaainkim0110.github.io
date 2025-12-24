@@ -17,6 +17,17 @@ const LEVEL4_COLOR = '#002060';
 const DELETED_COLOR = '#000000';
 // 신설 노드 색상
 const NEW_COLOR = '#FF6861';
+
+// 색상 밝기 계산 (밝으면 true, 어두우면 false)
+const isLightColor = (hexColor: string): boolean => {
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  // 밝기 계산 (0-255, 128 이상이면 밝은 색)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 128;
+};
 // 인원수 카운트 및 팀원 목록 표시 대상 고용형태
 const COUNTABLE_EMPLOYMENT_TYPES = ['임원', '정규_일반직', '정규직'];
 // 기본 Border가 표시되어야 하는 색상들 (수정, 폐지, 신설)
@@ -58,11 +69,11 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
   const [customColorHasBorder, setCustomColorHasBorder] = useState(true); // 커스텀 색상 border 여부
   const { selectedNodeId, isDragMode, setSelectedNode, setDragMode, updateNode, addNode, deleteNode, settings, addCustomColor, removeCustomColor } = useOrgChartStore();
 
-  // 커스텀 색상 중 border가 있는 색상들 추가
+  // 커스텀 색상 중 border가 있는 색상들 추가 (대소문자 통일)
   const borderColors = useMemo(() => {
     const customBorderColors = (settings.customColors || [])
       .filter(c => c.hasBorder)
-      .map(c => c.value);
+      .map(c => c.value.toUpperCase());
     return [...DEFAULT_BORDER_COLORS, ...customBorderColors];
   }, [settings.customColors]);
 
@@ -70,9 +81,14 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
   const effectiveBorderColor = useMemo(() => {
     // 삭제 예정 노드
     if (node.isDeleted) return DELETED_COLOR;
-    // 사용자가 명시적으로 설정한 border 색상
-    if (node.color && borderColors.includes(node.color)) return node.color;
-    // 수정된 노드 (color가 없거나 border가 없는 색상일 때)
+    // 사용자가 명시적으로 색상을 설정한 경우
+    if (node.color) {
+      // 해당 색상이 border가 있는 색상이면 border 표시
+      if (borderColors.includes(node.color.toUpperCase())) return node.color;
+      // 그렇지 않으면 border 없음 (사용자 색상이 isModified보다 우선)
+      return null;
+    }
+    // 사용자가 색상을 설정하지 않은 경우에만 isModified 체크
     if (node.isModified) return MODIFIED_COLOR;
     return null;
   }, [node.isDeleted, node.color, node.isModified, borderColors]);
@@ -186,9 +202,10 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
     if (node.isDeleted) {
       return 'text-white font-nanum-bold';
     }
-    // 사용자가 직접 설정한 색상이 있으면 우선
+    // 사용자가 직접 설정한 색상이 있으면 밝기에 따라 텍스트 색상 결정
     if (node.color) {
-      return 'text-white font-nanum-bold';
+      const textColor = isLightColor(node.color) ? 'text-gray-800' : 'text-white';
+      return `${textColor} font-nanum-bold`;
     }
     // 수정/이동된 노드는 파란색 배경 (color가 없는 경우에만)
     if (node.isModified) {
@@ -413,10 +430,8 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
           !isDragMode && 'hover:scale-105 transition-all duration-200',
           // 선택 상태 (액션 버튼 표시 중)
           showActions && 'ring-2 ring-blue-500 animate-neon-pulse',
-          // 드래그 모드 - 아이폰 스타일 흔들림
-          isDragMode && !isDragging && 'animate-ios-wiggle',
-          // 드래그 모드에서 선택된 노드 강조
-          isDragMode && isSelected && 'animate-selected-glow z-10',
+          // 드래그 모드 - 선택된 조직만 아이폰 스타일 흔들림 + 강조 효과
+          isDragMode && isSelected && !isDragging && 'animate-selected-wiggle z-10',
           // 드래그 중인 노드
           isDragging && 'opacity-50 scale-95 z-20',
           // 드롭 대상 (현재 노드 위에 호버 중)
@@ -426,7 +441,8 @@ export default function OrgNode({ node, onSelect, onToggle }: OrgNodeProps) {
         )}
         style={{
           // effectiveBorderColor가 있을 때 3px solid border 적용
-          ...(effectiveBorderColor && {
+          // 단, 드롭 대상일 때는 CSS 애니메이션 우선
+          ...(effectiveBorderColor && !(isOver && isDragMode && !isSelected) && {
             border: `3px solid ${effectiveBorderColor}`,
             borderRadius: '0.5rem', // rounded-lg와 동일
           }),

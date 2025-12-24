@@ -148,6 +148,12 @@ body {
   animation: selected-pulse 1s ease-in-out infinite;
 }
 
+/* 선택된 노드 흔들림 + 강조 효과 (드래그 모드) */
+.animate-selected-wiggle {
+  animation: ios-wiggle 0.5s ease-in-out infinite, selected-pulse 1s ease-in-out infinite;
+  transform-origin: center center;
+}
+
 /* 드래그 모드에서 드롭 가능 영역 표시 */
 @keyframes drop-target-pulse {
   0%, 100% {

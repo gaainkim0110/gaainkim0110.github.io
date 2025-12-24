@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Employee, OrgNode, OrgChartState, CachedData, AppSettings, ThemeMode, CustomColor } from '@/types';
+import type { Employee, OrgNode, OrgChartState, CachedData, AppSettings, ThemeMode, CustomColor, OriginalNodeState } from '@/types';
+
+// Undo/Redo를 위한 스냅샷 타입
+interface HistorySnapshot {
+  rootNodes: OrgNode[];
+  originalNodeStates?: Record<string, OriginalNodeState>;
+}
 
 interface OrgChartStore extends OrgChartState {
   // 캐시된 파일 목록
@@ -14,6 +20,10 @@ interface OrgChartStore extends OrgChartState {
 
   // 드래그 모드
   isDragMode: boolean;
+
+  // Undo/Redo 히스토리
+  history: HistorySnapshot[];
+  future: HistorySnapshot[];
 
   // Actions
   setOrgChart: (data: Partial<OrgChartState>) => void;
@@ -36,6 +46,10 @@ interface OrgChartStore extends OrgChartState {
   setSettings: (settings: Partial<AppSettings>) => void;
   addCustomColor: (color: CustomColor) => void;
   removeCustomColor: (colorValue: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
   reset: () => void;
 }
 
@@ -55,6 +69,8 @@ const initialState: Omit<OrgChartState, 'lastImportDate'> & {
   settings: AppSettings;
   selectedNodeId: string | null;
   isDragMode: boolean;
+  history: HistorySnapshot[];
+  future: HistorySnapshot[];
 } = {
   rootNodes: [],
   employees: [],
@@ -64,7 +80,12 @@ const initialState: Omit<OrgChartState, 'lastImportDate'> & {
   settings: initialSettings,
   selectedNodeId: null,
   isDragMode: false,
+  history: [],
+  future: [],
 };
+
+// 히스토리 최대 개수
+const MAX_HISTORY_LENGTH = 50;
 
 // Helper: 노드 트리에서 특정 노드 찾기
 const findNode = (nodes: OrgNode[], nodeId: string): OrgNode | null => {
@@ -134,6 +155,41 @@ const addNodeToTree = (nodes: OrgNode[], parentId: string, newNode: OrgNode): Or
   });
 };
 
+// Helper: 트리에서 모든 노드의 원본 상태 수집
+const collectOriginalNodeStates = (nodes: OrgNode[], parentId?: string): Record<string, OriginalNodeState> => {
+  const states: Record<string, OriginalNodeState> = {};
+
+  for (const node of nodes) {
+    states[node.id] = {
+      name: node.name,
+      leaderName: node.leader?.name,
+      parentId: parentId,
+    };
+
+    // 자식 노드들도 재귀적으로 수집
+    const childStates = collectOriginalNodeStates(node.children, node.id);
+    Object.assign(states, childStates);
+  }
+
+  return states;
+};
+
+// Helper: 노드가 원본 상태와 동일한지 확인
+const isNodeMatchingOriginal = (
+  node: OrgNode,
+  newParentId: string | undefined,
+  originalStates: Record<string, OriginalNodeState> | undefined
+): boolean => {
+  if (!originalStates || !originalStates[node.id]) return false;
+
+  const original = originalStates[node.id];
+  return (
+    node.name === original.name &&
+    (node.leader?.name || undefined) === original.leaderName &&
+    newParentId === original.parentId
+  );
+};
+
 // Helper: 노드와 모든 하위 노드에서 직원 정보 수집 (employeeId 기준 중복 제거)
 const collectAllMembers = (node: OrgNode): Map<string, { relation: string; employmentType: string }> => {
   const memberMap = new Map<string, { relation: string; employmentType: string }>();
@@ -189,17 +245,49 @@ const recalculateMemberCounts = (nodes: OrgNode[]): OrgNode[] => {
   });
 };
 
+// Helper: 현재 상태를 히스토리에 저장
+const saveToHistory = (state: OrgChartStore): { history: HistorySnapshot[]; future: HistorySnapshot[] } => {
+  const snapshot: HistorySnapshot = {
+    rootNodes: JSON.parse(JSON.stringify(state.rootNodes)), // Deep copy
+    originalNodeStates: state.originalNodeStates ? { ...state.originalNodeStates } : undefined,
+  };
+
+  // 히스토리에 추가하고 future 초기화
+  const newHistory = [...state.history, snapshot];
+
+  // 최대 개수 제한
+  if (newHistory.length > MAX_HISTORY_LENGTH) {
+    newHistory.shift();
+  }
+
+  return {
+    history: newHistory,
+    future: [], // 새로운 변경 시 redo 히스토리 초기화
+  };
+};
+
 export const useOrgChartStore = create<OrgChartStore>()(
   persist(
     (set, get) => ({
       ...initialState,
 
-      setOrgChart: (data) => set((state) => ({
-        ...state,
-        ...data,
-        isDirty: true,
-        lastImportDate: new Date(),
-      })),
+      setOrgChart: (data) => set((state) => {
+        // 새로운 rootNodes가 있으면 원본 상태 저장 및 히스토리 초기화
+        const originalNodeStates = data.rootNodes
+          ? collectOriginalNodeStates(data.rootNodes)
+          : state.originalNodeStates;
+
+        return {
+          ...state,
+          ...data,
+          originalNodeStates,
+          isDirty: true,
+          lastImportDate: new Date(),
+          // 새 데이터 import 시 히스토리 초기화
+          history: [],
+          future: [],
+        };
+      }),
 
       setEmployees: (employees) => set({ employees, isDirty: true }),
 
@@ -228,11 +316,25 @@ export const useOrgChartStore = create<OrgChartStore>()(
         if (nodeId === newParentId) return state;
         if (findNode([nodeToMove], newParentId)) return state;
 
+        // 히스토리에 현재 상태 저장
+        const historyUpdate = saveToHistory(state);
+
         // 기존 위치에서 제거
         let newRootNodes = removeNodeFromTree(state.rootNodes, nodeId);
 
-        // 새 위치에 추가 (이동된 노드에 isModified 플래그 설정)
-        const movedNode = { ...nodeToMove, parentId: newParentId, isModified: true };
+        // 원본 상태와 비교하여 isModified 결정
+        const isBackToOriginal = isNodeMatchingOriginal(
+          nodeToMove,
+          newParentId,
+          state.originalNodeStates
+        );
+
+        // 새 위치에 추가
+        const movedNode = {
+          ...nodeToMove,
+          parentId: newParentId,
+          isModified: !isBackToOriginal,  // 원본과 같으면 false, 다르면 true
+        };
         newRootNodes = addNodeToTree(newRootNodes, newParentId, movedNode);
 
         // 인원수 재계산
@@ -241,24 +343,55 @@ export const useOrgChartStore = create<OrgChartStore>()(
         return {
           rootNodes: recalculatedNodes,
           isDirty: true,
+          ...historyUpdate,
         };
       }),
 
       updateNode: (nodeId, updates) => set((state) => {
+        // 현재 부모 찾기
+        const parentNode = findParentNode(state.rootNodes, nodeId);
+        const currentParentId = parentNode?.id;
+
+        // 히스토리에 현재 상태 저장
+        const historyUpdate = saveToHistory(state);
+
         // 먼저 노드 업데이트
-        const updatedNodes = updateNodeInTree(state.rootNodes, nodeId, (node) => ({
-          ...node,
-          ...updates,
-        }));
+        const updatedNodes = updateNodeInTree(state.rootNodes, nodeId, (node) => {
+          // 업데이트 적용
+          const mergedNode = { ...node, ...updates };
+
+          // 원본 상태와 비교하여 isModified 결정 (구조적 변경만 체크)
+          // 단, 명시적으로 isModified: true가 설정되지 않은 경우에만 자동 판단
+          if (updates.isModified !== undefined) {
+            // 호출자가 isModified를 명시적으로 설정한 경우
+            // 원본과 일치하면 false로 덮어쓰기, 아니면 호출자 값 유지
+            const isBackToOriginal = isNodeMatchingOriginal(
+              mergedNode,
+              currentParentId,
+              state.originalNodeStates
+            );
+            return {
+              ...mergedNode,
+              isModified: isBackToOriginal ? false : updates.isModified,
+            };
+          }
+
+          return mergedNode;
+        });
+
         // 인원수 재계산
         const recalculatedNodes = recalculateMemberCounts(updatedNodes);
         return {
           rootNodes: recalculatedNodes,
           isDirty: true,
+          ...historyUpdate,
         };
       }),
 
       addNode: (parentId, nodeData) => set((state) => {
+        // 히스토리에 현재 상태 저장
+        const historyUpdate = saveToHistory(state);
+
         const newNode: OrgNode = {
           ...nodeData,
           id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -274,10 +407,14 @@ export const useOrgChartStore = create<OrgChartStore>()(
         return {
           rootNodes: recalculatedNodes,
           isDirty: true,
+          ...historyUpdate,
         };
       }),
 
       deleteNode: (nodeId) => set((state) => {
+        // 히스토리에 현재 상태 저장
+        const historyUpdate = saveToHistory(state);
+
         const newRootNodes = removeNodeFromTree(state.rootNodes, nodeId);
         // 인원수 재계산
         const recalculatedNodes = recalculateMemberCounts(newRootNodes);
@@ -285,6 +422,7 @@ export const useOrgChartStore = create<OrgChartStore>()(
           rootNodes: recalculatedNodes,
           isDirty: true,
           selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+          ...historyUpdate,
         };
       }),
 
@@ -351,6 +489,58 @@ export const useOrgChartStore = create<OrgChartStore>()(
           customColors: (state.settings.customColors || []).filter(c => c.value !== colorValue),
         },
       })),
+
+      // Undo: 이전 상태로 되돌리기
+      undo: () => set((state) => {
+        if (state.history.length === 0) return state;
+
+        // 현재 상태를 future에 저장
+        const currentSnapshot: HistorySnapshot = {
+          rootNodes: JSON.parse(JSON.stringify(state.rootNodes)),
+          originalNodeStates: state.originalNodeStates ? { ...state.originalNodeStates } : undefined,
+        };
+
+        // 마지막 히스토리에서 상태 복원
+        const newHistory = [...state.history];
+        const previousSnapshot = newHistory.pop()!;
+
+        return {
+          rootNodes: previousSnapshot.rootNodes,
+          originalNodeStates: previousSnapshot.originalNodeStates,
+          history: newHistory,
+          future: [...state.future, currentSnapshot],
+          isDirty: true,
+        };
+      }),
+
+      // Redo: 취소한 작업 다시 실행
+      redo: () => set((state) => {
+        if (state.future.length === 0) return state;
+
+        // 현재 상태를 history에 저장
+        const currentSnapshot: HistorySnapshot = {
+          rootNodes: JSON.parse(JSON.stringify(state.rootNodes)),
+          originalNodeStates: state.originalNodeStates ? { ...state.originalNodeStates } : undefined,
+        };
+
+        // 마지막 future에서 상태 복원
+        const newFuture = [...state.future];
+        const nextSnapshot = newFuture.pop()!;
+
+        return {
+          rootNodes: nextSnapshot.rootNodes,
+          originalNodeStates: nextSnapshot.originalNodeStates,
+          history: [...state.history, currentSnapshot],
+          future: newFuture,
+          isDirty: true,
+        };
+      }),
+
+      // Undo 가능 여부
+      canUndo: () => get().history.length > 0,
+
+      // Redo 가능 여부
+      canRedo: () => get().future.length > 0,
 
       reset: () => set({
         ...initialState,
